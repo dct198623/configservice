@@ -9,6 +9,7 @@ spring:
       server:
         git:
           uri: https://github.com/AceNexus/configservice
+          searchPaths: src/main/resources
 
 eureka:
   client:

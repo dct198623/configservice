@@ -1,0 +1,9 @@
+server:
+  port: 8081
+
+spring:
+  datasource:
+    url: jdbc:mysql://tata-dev.cvk0asgak4vg.ap-southeast-2.rds.amazonaws.com:3306/accountdb?useSSL=false
+    username: tata
+    password: 198623onepiece
+    driver-class-name: com.mysql.cj.jdbc.Driver
