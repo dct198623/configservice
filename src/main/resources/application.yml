@@ -9,7 +9,8 @@ spring:
       server:
         git:
           uri: https://github.com/AceNexus/configservice
-          searchPaths: src/main/resources
+          searchPaths: src/main/resources/{application}
+          clone-on-start: true
 
 eureka:
   client:
