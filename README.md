@@ -9,7 +9,7 @@
     - [訪問配置](#訪問配置)
     - [客戶端配置](#客戶端配置)
     - [部署到正式環境](#部署到正式環境)
-    - [GitHub Actions](#GitHub Actions)
+    - [工作流程 GitHub Actions](#工作流程 GitHub Actions)
     - [版本號更新指南](#版本號更新指南)
 - [部署步驟](#部署步驟)
     - [建立資料夾](#建立資料夾)
@@ -75,7 +75,7 @@ git tag -a v0.0.1 -m "版本 0.0.1"
 git push origin --tags
 ```
 
-### GitHub Actions
+### 工作流程 GitHub Actions
 
 - [main.yml](.github%2Fworkflows%2Fmain.yml): 監聽新標籤事件，自動觸發持續部署流程
 
