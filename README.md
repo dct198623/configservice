@@ -9,7 +9,6 @@
     - [訪問配置](#訪問配置)
     - [客戶端配置](#客戶端配置)
     - [部署到正式環境](#部署到正式環境)
-    - [工作流程 GitHub Actions](#工作流程 GitHub Actions)
     - [版本號更新指南](#版本號更新指南)
 - [部署步驟](#部署步驟)
     - [建立資料夾](#建立資料夾)
@@ -71,13 +70,9 @@ git pull --rebase origin main
 # 2. 為當前最新的 commit 打標籤
 git tag -a v0.0.1 -m "版本 0.0.1"
 
-# 3. 推送標籤到遠端倉庫
+# 3. 推送標籤到遠端倉庫，觸發 GitHub Actions
 git push origin --tags
 ```
-
-### 工作流程 GitHub Actions
-
-- [main.yml](.github%2Fworkflows%2Fmain.yml): 監聽新標籤事件，自動觸發持續部署流程
 
 ### 版本號更新指南
 
