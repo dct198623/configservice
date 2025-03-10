@@ -1,0 +1,19 @@
+server:
+  port: 8761  # Eureka Server 監聽的端口
+
+eureka:
+  instance:
+    hostname: 127.0.0.1  # Eureka 服務實例主機名
+    prefer-ip-address: true  # 使用 IP 地址而非主機名，適合容器化環境
+    lease-renewal-interval-in-seconds: 30  # 心跳時間，服務續約間隔時間
+    lease-expiration-duration-in-seconds: 90  # 服務失效時間，超過這個時間沒收到心跳就剔除
+  client:
+    register-with-eureka: false  # 不向註冊中心註冊自己
+    fetch-registry: false  # 不從註冊中心獲取服務清單
+    service-url:
+      defaultZone: http://${eureka.instance.hostname}:${server.port}/eurekaservice/eureka/  # Eureka 服務 URL，注意需要加上 /eureka/ 後綴
+  server:
+    enable-self-preservation: true  # 啟用自我保護模式，防止網絡問題導致的服務誤判
+    renewal-percent-threshold: 0.85  # 續約百分比閾值，低於此值進入自我保護模式
+    eviction-interval-timer-in-ms: 15000  # 服務剔除間隔時間（毫秒）
+
