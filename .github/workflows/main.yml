@@ -89,7 +89,7 @@ jobs:
             docker build --no-cache --progress=plain -t configservice . || exit 1
             
             # 啟動新容器
-            docker run -d --name configservice -p 8888:8888 configservice || exit 1
+            docker run -d --name=configservice --network tata-network -p 8888:8888 configservice || exit 1
             
             # 等待一段時間，讓容器和服務完全啟動
             sleep 30
@@ -104,8 +104,8 @@ jobs:
 
             # 檢查端口是否正在監聽
             if netstat -tuln | grep :8888; then
-              echo "Port 8761 is open."
+              echo "Port 8888 is open."
             else
-              echo "Port 8761 is not open."
+              echo "Port 8888 is not open."
               exit 1
             fi
