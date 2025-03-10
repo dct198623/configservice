@@ -16,9 +16,6 @@ RUN set -e && \
     echo "Latest JAR: $latest_jar" && \
     ln -sf "$latest_jar" /app/configservice.jar
 
-# 設定 Spring Boot 啟動的環境變數，使用 "prod" 環境
-ENV SPRING_PROFILES_ACTIVE=prod
-
 # 設定應用程序主機地址
 ENV HOST=127.0.0.1
 
