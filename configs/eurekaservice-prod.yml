@@ -18,4 +18,3 @@ eureka:
     enable-self-preservation: true  # 啟用自我保護模式，防止網絡問題導致的服務誤判
     renewal-percent-threshold: 0.85  # 續約百分比閾值，低於此值進入自我保護模式
     eviction-interval-timer-in-ms: 15000  # 服務剔除間隔時間（毫秒）
-
