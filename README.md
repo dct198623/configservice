@@ -41,22 +41,32 @@
 
 ### 訪問配置
 
-- 微服務可以通過 URL 訪問配置：
-    - `http://localhost:8888/{application}/{profile}`
+- 可以通過 URL 訪問配置：
+    - http://localhost:8888/configservice/{application}/{profile}
 - 例如，要取得 `accountservice` 的 `dev` 環境下的配置，請訪問：
-    - `http://localhost:8888/configservice/accountservice/dev`
+    - http://127.0.0.1:8888/configservice/eurekaservice/dev
 
 ### 客戶端配置
 
-- 要使微服務能夠正確連接並從 ConfigService 獲取配置，需要在其 `bootstrap.yml` 文件中進行以下配置：
+1. 添加依賴：在 build.gradle.kts 中添加以下依賴
+
+```kotlin
+dependencies {
+    implementation("org.springframework.cloud:spring-cloud-starter-config")
+    implementation("org.springframework.cloud:spring-cloud-starter-bootstrap")
+}
+```
+
+2. 配置 bootstrap.yml：在 /src/main/resources 資料夾下建立 bootstrap.yml 檔案，並進行配置
 
 ```yaml
 spring:
-  application:
-    name: accountservice-dev
   cloud:
     config:
-      uri: http://localhost:8888/configservice
+      name: ${您的服務名稱}  # 例如：eurekaservice
+      profile: dev          # 環境設定：dev、test、prod 等
+      uri: http://localhost:8888/configservice  # 配置服務的 URI
+      fail-fast: true       # 如果連線失敗立即報錯
 ```
 
 ### 部署到正式環境
