@@ -2,8 +2,6 @@ server:
   port: ${SERVER_PORT:8888}
 
 spring:
-  application:
-    name: configservice
   cloud:
     config:
       server:
@@ -15,5 +13,5 @@ spring:
           timeout: 5  # 設定 Git 請求超時秒數，防止連線問題
   security:
     user:
-      name: admin
+      name: ${SECURITY_USERNAME:admin}
       password: ${SECURITY_PASSWORD:password}
