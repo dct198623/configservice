@@ -4,6 +4,7 @@ FROM eclipse-temurin:21-jre-alpine
 # 設定應用程式環境變數
 ENV HOST=127.0.0.1
 ENV SERVER_PORT=8888
+ENV SECURITY_USERNAME=admin
 ENV SECURITY_PASSWORD=password
 ENV SPRING_PROFILES_ACTIVE=dev
 
