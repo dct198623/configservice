@@ -20,5 +20,5 @@ eureka:
 spring:
   security:
     user:
-      name: admin
+      name: ${SECURITY_USERNAME:admin}
       password: ${SECURITY_PASSWORD:password}
