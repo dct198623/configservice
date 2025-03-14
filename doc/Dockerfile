@@ -1,11 +1,11 @@
+# 使用 OpenJDK 21（Alpine 版）作為基礎映像，體積較小且適合容器化部署
+FROM eclipse-temurin:21-jre-alpine
+
 # 設定應用程式環境變數
 ENV HOST=127.0.0.1
 ENV SERVER_PORT=8888
 ENV SECURITY_PASSWORD=password
 ENV SPRING_PROFILES_ACTIVE=dev
-
-# 使用 OpenJDK 21（Alpine 版）作為基礎映像，體積較小且適合容器化部署
-FROM eclipse-temurin:21-jre-alpine
 
 # 設定工作目錄為 /app
 WORKDIR /app
