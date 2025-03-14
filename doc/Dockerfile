@@ -1,3 +1,9 @@
+# 設定應用程式環境變數
+ENV HOST=127.0.0.1
+ENV SERVER_PORT=8888
+ENV SECURITY_PASSWORD=password
+ENV SPRING_PROFILES_ACTIVE=dev
+
 # 使用 OpenJDK 21（Alpine 版）作為基礎映像，體積較小且適合容器化部署
 FROM eclipse-temurin:21-jre-alpine
 
@@ -15,9 +21,6 @@ RUN set -e && \
     latest_jar=$(ls -t /app/configservice-*.jar | head -n1) && \
     echo "Latest JAR: $latest_jar" && \
     ln -sf "$latest_jar" /app/configservice.jar
-
-# 設定應用程序主機地址
-ENV HOST=127.0.0.1
 
 # 以 Java 啟動應用程式
 CMD ["java", "-jar", "/app/configservice.jar"]
