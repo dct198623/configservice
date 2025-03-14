@@ -43,7 +43,7 @@
 
 - 可以通過 URL 訪問配置：
     - http://localhost:8888/configservice/{application}/{profile}
-- 例如，要取得 `accountservice` 的 `dev` 環境下的配置，請訪問：
+- 例如，要取得 `eurekaservice` 的 `dev` 環境下的配置，請訪問：
     - http://127.0.0.1:8888/configservice/eurekaservice/dev
 
 ### 客戶端配置
