@@ -11,6 +11,13 @@ spring:
           enabled: true # 啟用服務發現
           lower-case-service-id: true # 服務 ID 轉換為小寫
       routes:
+        - id: gatewayservice
+          uri: lb://gatewayservice
+          predicates:
+            - Path=/api/v1/gateway/**
+          filters:
+            - StripPrefix=3 # 去掉 /api/v1/gateway 前綴
+
         - id: accountservice
           uri: lb://accountservice
           predicates:
