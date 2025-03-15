@@ -1,139 +1,120 @@
 # Config Service
 
-## 目錄
+## 概述
+採用 **Spring Cloud Config Server**，提供**集中式管理與動態更新**微服務配置，透過 Git 儲存，支持版本控制與歷史追蹤。
 
-- [Config 服務](#config-服務)
-    - [概述](#概述)
-    - [參考資料](#參考資料)
-    - [配置文件](#配置文件)
-    - [訪問配置](#訪問配置)
-    - [客戶端配置](#客戶端配置)
-    - [部署到正式環境](#部署到正式環境)
-    - [版本號更新指南](#版本號更新指南)
-- [部署步驟](#部署步驟)
-    - [建立資料夾](#建立資料夾)
-    - [部署 JAR 文件](#部署-jar-文件)
-    - [建立 Dockerfile](#建立-dockerfile)
-    - [建構 Docker 映像檔](#建構-docker-映像檔)
-    - [啟動服務](#啟動服務)
-    - [確認服務啟動狀態](#確認服務啟動狀態)
+## 快速入門
 
----
+### 微服務訪問配置
+- URL 格式：`http://localhost:8888/{application}/{profile}`
+- 範例：`http://127.0.0.1:8888/eurekaservice/dev`
 
-## Config 服務
+### 微服務整合步驟
+1. **添加依賴**：
+   ```kotlin
+   dependencies {
+       implementation("org.springframework.cloud:spring-cloud-starter-config")
+       implementation("org.springframework.cloud:spring-cloud-starter-bootstrap")
+   }
+   ```
 
-### 概述
+2. **配置 bootstrap.yml**：
+   ```yaml
+   spring:
+     cloud:
+       config:
+         name: ${服務名稱} # 例如：eurekaservice
+         profile: dev # 環境設定：dev、test、prod 等
+         uri: http://localhost:8888/ # 配置服務的 URI
+         fail-fast: true # 如果連線失敗立即報錯
+   ```
 
-- Config Service 採用 **Spring Cloud Config Server**，提供 **集中式管理與動態更新** 微服務配置，具備以下功能：
-    - **配置存儲**：透過 Git 儲存，支持版本控制與歷史追蹤
-    - **RESTful API**：提供 API 動態獲取配置，適用於 Kubernetes、Spring Boot 等應用
+## 部署指南
 
-### 參考資料
-
-- [Spring Cloud Config 文檔](https://docs.spring.io/spring-cloud-config/docs/current/reference/html/)
-- [Spring Cloud 文檔](https://spring.io/projects/spring-cloud)
-
-### 配置文件
-
-- ConfigService 的主要配置文件：[application.yml](src%2Fmain%2Fresources%2Fapplication.yml)
-    - 該文件配置了服務的端口、配置來源及註冊等資訊
-- 其他服務配置文件 [configs](configs)
-
-### 訪問配置
-
-- 可以通過 URL 訪問配置：
-    - http://localhost:8888/configservice/{application}/{profile}
-- 例如，要取得 `eurekaservice` 的 `dev` 環境下的配置，請訪問：
-    - http://127.0.0.1:8888/configservice/eurekaservice/dev
-
-### 客戶端配置
-
-1. 添加依賴：在 build.gradle.kts 中添加以下依賴
-
-```kotlin
-dependencies {
-    implementation("org.springframework.cloud:spring-cloud-starter-config")
-    implementation("org.springframework.cloud:spring-cloud-starter-bootstrap")
-}
-```
-
-2. 配置 bootstrap.yml：在 /src/main/resources 資料夾下建立 bootstrap.yml 檔案，並進行配置
-
-```yaml
-spring:
-  cloud:
-    config:
-      name: ${您的服務名稱}  # 例如：eurekaservice
-      profile: dev          # 環境設定：dev、test、prod 等
-      uri: http://localhost:8888/configservice  # 配置服務的 URI
-      fail-fast: true       # 如果連線失敗立即報錯
-```
-
-### 部署到正式環境
-
+### 自動部署 (GitHub Actions)
 ```bash
-# 1. 確保 main 分支是最新的
 git checkout main
-git fetch origin
 git pull --rebase origin main
-
-# 2. 為當前最新的 commit 打標籤
-git tag -a v0.0.1 -m "版本 0.0.1"
-
-# 3. 推送標籤到遠端倉庫，觸發 GitHub Actions
+git tag -a v0.0.1 -m "v0.0.1"
 git push origin --tags
 ```
 
-### 版本號更新指南
+### 手動部署
+1. **建立資料夾**：
+   ```shell
+   sudo mkdir -p /opt/tata/configservice
+   ```
 
-| 版本變更      | 說明          | 例子              |
-|-----------|-------------|-----------------|
-| **MAJOR** | 破壞性變更，不相容舊版 | `1.0.0 → 2.0.0` |
-| **MINOR** | 新增功能，向下相容   | `1.1.0 → 1.2.0` |
-| **PATCH** | 修 bug，不影響功能 | `1.2.1 → 1.2.2` |
+2. **放置 JAR 文件**：將 configservice.jar 放入 /opt/tata/configservice
 
----
+3. **建立 Dockerfile**：
+   ```shell
+   sudo touch /opt/tata/configservice/Dockerfile
+   sudo chown -R ubuntu:ubuntu /opt/tata/configservice/Dockerfile
+   ```
 
-## 部署步驟
+4. **建構與啟動**：
+   ```shell
+   cd /opt/tata/configservice
+   docker build --no-cache -t configservice .
+   
+   # 啟動容器（含環境變數設定）
+   docker run -di --name=configservice \
+     --network tata-network \
+     -p 8888:8888 \
+     -e SERVER_HOST=127.0.0.1 \
+     -e SERVER_PORT=8888 \
+     -e SECURITY_USERNAME=admin \
+     -e SECURITY_PASSWORD=password \
+     -e SPRING_PROFILES_ACTIVE=dev \
+     configservice
+   ```
 
-### 建立資料夾
+5. **確認狀態**：
+   ```shell
+   docker logs -f --tail 1000 configservice
+   ```
 
-- 在伺服器上，建立存放服務的專用資料夾
+### 其他服務啟動命令
 
+#### Eureka Service
 ```shell
-sudo mkdir -p /opt/tata/configservice
+# 啟動容器
+docker run -d --name=eurekaservice --network tata-network -p 8761:8761 \
+  -e SERVER_HOST=127.0.0.1 \
+  -e SERVER_PORT=8761 \
+  -e SECURITY_USERNAME=admin \
+  -e SECURITY_PASSWORD=password \
+  -e SPRING_PROFILES_ACTIVE=dev \
+  -e CONFIG_SERVER_USERNAME=admin \
+  -e CONFIG_SERVER_PASSWORD=password \
+  -e CONFIG_SERVER_URI=http://configservice:8888 \
+  eurekaservice
 ```
 
-### 部署 JAR 文件
-
-將 configservice.jar 放入 /opt/tata/configservice
-
-### 建立 Dockerfile
-
-在 /opt/tata/configservice/ 目錄內，建立 Dockerfile
-
+#### API Gateway
 ```shell
-sudo touch /opt/tata/configservice/Dockerfile
-sudo chown -R ubuntu:ubuntu /opt/tata/configservice/Dockerfile
+# 啟動容器
+docker run -d --name=gatewayservice --network tata-network -p 8080:8080 \
+  -e SERVER_HOST=127.0.0.1 \
+  -e SERVER_PORT=8080 \
+  -e SECURITY_USERNAME=admin \
+  -e SECURITY_PASSWORD=password \
+  -e SPRING_PROFILES_ACTIVE=dev \
+  -e CONFIG_SERVER_USERNAME=admin \
+  -e CONFIG_SERVER_PASSWORD=password \
+  -e CONFIG_SERVER_URI=http://configservice:8888 \
+  -e EUREKA_SERVER_HOST=eurekaservice \
+  -e EUREKA_SERVER_PORT=8761 \
+  gatewayservice
 ```
 
-完整 Dockerfile 可參考 [doc/Dockerfile](doc/Dockerfile)
+## 版本管理
+- **MAJOR**: 不兼容的重大變更（例：1.0.0 → 2.0.0）
+- **MINOR**: 新增功能，向下相容（例：1.1.0 → 1.2.0）
+- **PATCH**: 修正錯誤，無功能變化（例：1.2.1 → 1.2.2）
 
-### 建構 Docker 映像檔
-
-```shell
-cd /opt/tata/configservice
-docker build --no-cache --progress=plain -t configservice .
-```
-
-### 啟動服務
-
-```shell
-docker run -di --name=configservice --network tata-network -p 8888:8888 configservice
-```
-
-### 確認服務啟動狀態
-
-```shell
-docker logs -f --tail 1000 configservice
-```
+## 參考資源
+- [Spring Cloud Config 文檔](https://docs.spring.io/spring-cloud-config/docs/current/reference/html/)
+- 服務主要配置文件：[application.yml](src%2Fmain%2Fresources%2Fapplication.yml)
+- Docker 範例：[doc/Dockerfile](docs/docker/configservice/Dockerfile)
