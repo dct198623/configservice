@@ -13,7 +13,7 @@ ENV SPRING_PROFILES_ACTIVE=dev
 ## 配置伺服器設定
 ENV CONFIG_SERVER_USERNAME=admin
 ENV CONFIG_SERVER_PASSWORD=password
-ENV CONFIG_SERVER_URI=http://127.0.0.1:8888
+ENV CONFIG_SERVER_URI=http://configservice:8888
 
 # 設定工作目錄為 /app
 WORKDIR /app
@@ -22,7 +22,7 @@ WORKDIR /app
 COPY eurekaservice-*.jar /app/
 
 # 確保 JAR 檔案已成功複製
-RUN ls -la /app/ && ls -la /app/configservice-*.jar || echo "No JAR found!"
+RUN ls -la /app/ && ls -la /app/eurekaservice-*.jar || echo "No JAR found!"
 
 # 建立指向最新 JAR 檔案的符號連結，確保一致的啟動方式
 RUN set -e && \
