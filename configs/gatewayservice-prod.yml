@@ -30,6 +30,9 @@ spring:
       password: ${SECURITY_PASSWORD:password} # 設定管理密碼
 
 eureka:
+  instance:
+    prefer-ip-address: true
+    ip-address: ${SERVER_HOST:127.0.0.1}
   client:
     service-url:
       defaultZone: http://${EUREKA_SERVER_HOST:127.0.0.1}:${EUREKA_SERVER_PORT:8761}/eureka/ # Eureka 服務地址
