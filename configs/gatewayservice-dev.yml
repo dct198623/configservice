@@ -1,9 +1,4 @@
-server:
-  port: ${SERVER_PORT:8080}
-
 spring:
-  application:
-    name: gatewayservice
   cloud:
     gateway:
       discovery:
@@ -18,17 +13,6 @@ spring:
           filters:
             - StripPrefix=3 # 去掉 /api/v1/gateway 前綴
 
-        - id: accountservice
-          uri: lb://accountservice
-          predicates:
-            - Path=/api/v1/account/**
-          filters:
-            - StripPrefix=1 # 僅去掉 /api 前綴
-  security:
-    user:
-      name: ${SECURITY_USERNAME:admin} # 設定管理用戶名
-      password: ${SECURITY_PASSWORD:password} # 設定管理密碼
-
 eureka:
   instance:
     prefer-ip-address: true
@@ -36,9 +20,3 @@ eureka:
   client:
     service-url:
       defaultZone: http://${EUREKA_SERVER_HOST:127.0.0.1}:${EUREKA_SERVER_PORT:8761}/eureka/ # Eureka 服務地址
-
-logging:
-  level:
-    root: INFO # 全局 log 等級
-  pattern:
-    console: "[%d{yyyy-MM-dd HH:mm:ss.SSS}] [%level] [%thread] [%logger{36}] - %msg%n"
