@@ -107,11 +107,11 @@ docker run -d --name=gatewayservice --network tata-network -p 8080:8080 \
   -e SERVER_PORT=8080 \
   -e SECURITY_USERNAME=admin \
   -e SECURITY_PASSWORD=password \
-  -e SPRING_PROFILES_ACTIVE=dev \
+  -e SPRING_PROFILES_ACTIVE=prod \
   -e CONFIG_SERVER_USERNAME=admin \
   -e CONFIG_SERVER_PASSWORD=password \
-  -e CONFIG_SERVER_URI=http://configservice:8888 \
-  -e EUREKA_SERVER_HOST=eurekaservice \
+  -e CONFIG_SERVER_URI=http://127.0.0.1:8888 \
+  -e EUREKA_SERVER_HOST=127.0.0.1 \
   -e EUREKA_SERVER_PORT=8761 \
   gatewayservice
 ```
