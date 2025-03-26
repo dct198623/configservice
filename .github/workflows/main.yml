@@ -4,31 +4,29 @@ on:
     tags:
       - 'v*.*.*'
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Debug Git Tags
-        run: |
+      - run: |
           git tag
           git describe --tags --abbrev=0
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+
+      - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Build and Test Project
-        run: |
+      - run: |
           chmod +x gradlew
-          ./gradlew build test
-      - name: Upload JAR Artifact
-        uses: actions/upload-artifact@v4
+          ./gradlew build test || exit 1
+
+      - uses: actions/upload-artifact@v4
         with:
           name: configservice-jar
           path: build/libs/*.jar
@@ -37,25 +35,16 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '21'
-
-      - name: Download Artifact
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: configservice-jar
           path: ./
 
-      - name: Deploy JAR to EC2
-        uses: appleboy/scp-action@master
+      - uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
@@ -63,8 +52,7 @@ jobs:
           source: "./*.jar"
           target: "/opt/tata/configservice/"
 
-      - name: Deploy and Run Docker Container
-        uses: appleboy/ssh-action@master
+      - uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
@@ -72,40 +60,34 @@ jobs:
           script: |
             cd /opt/tata/configservice
             
+            # 詳細日誌輸出
+            set -x
+            
+            # 防呆機制：提前檢查必要條件
+            [ -f Dockerfile ] || { echo "Dockerfile not found"; exit 1; }
+            [ "$(ls *.jar | wc -l)" -eq 1 ] || { echo "Jar file count error"; exit 1; }
+            
             # 停止並刪除現有容器
-            docker stop configservice || true
-            docker rm configservice || true
+            docker stop configservice 2>/dev/null || true
+            docker rm configservice 2>/dev/null || true
             
-            # 確保 JAR 檔案已正確複製
-            ls -l /opt/tata/configservice/*.jar
+            # 建立並運行新容器
+            docker build -t configservice . || { echo "Docker build failed"; exit 1; }
+            docker run -d --name configservice -p 8888:8888 configservice || { echo "Docker run failed"; exit 1; }
             
-            # 檢查 Dockerfile 是否存在
-            if [ ! -f /opt/tata/configservice/Dockerfile ]; then
-              echo "Dockerfile not found"
-              exit 1
-            fi
+            # 等待容器穩定
+            sleep 10
             
-            # 建立 Docker 映像
-            docker build --no-cache --progress=plain -t configservice . || exit 1
+            # 運行狀態檢查，增加更多診斷信息
+            docker ps | grep configservice || { 
+                echo "Container not running"; 
+                docker ps -a | grep configservice;  # 顯示容器詳細信息
+                docker logs configservice;  # 輸出容器日誌
+                exit 1; 
+            }
             
-            # 啟動新容器
-            docker run -d --name configservice -p 8888:8888 configservice || exit 1
-            
-            # 等待一段時間，讓容器和服務完全啟動
-            sleep 30
-            
-            # 檢查容器是否正在運行
-            if [ "$(docker ps -q -f name=configservice)" ]; then
-              echo "Container is running."
-            else
-              echo "Container is not running."
-              exit 1
-            fi
-
-            # 檢查端口是否正在監聽
-            if netstat -tuln | grep :8888; then
-              echo "Port 8888 is open."
-            else
-              echo "Port 8888 is not open."
-              exit 1
-            fi
+            # 額外的服務可用性檢查
+            docker exec configservice wget -q -O- http://localhost:8888/actuator/health || {
+                echo "Service health check failed";
+                exit 1;
+            }
