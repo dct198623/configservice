@@ -89,17 +89,11 @@ jobs:
             docker build --no-cache --progress=plain -t configservice . || exit 1
             
             # 啟動新容器
-            docker run -d --name=configservice --network tata-network -p 8888:8888 \
-            -e SERVER_HOST=127.0.0.1 \
-            -e SERVER_PORT=8888 \
-            -e SECURITY_USERNAME=admin \
-            -e SECURITY_PASSWORD=password \
-            -e SPRING_PROFILES_ACTIVE=dev \
-            configservice || exit 1
-  
+            docker run -d --name configservice -p 8888:8888 configservice || exit 1
+            
             # 等待一段時間，讓容器和服務完全啟動
             sleep 30
-  
+            
             # 檢查容器是否正在運行
             if [ "$(docker ps -q -f name=configservice)" ]; then
               echo "Container is running."
