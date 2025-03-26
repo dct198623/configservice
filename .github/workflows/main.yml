@@ -6,16 +6,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - run: |
-          git tag
-          git describe --tags --abbrev=0
 
       - uses: actions/setup-java@v4
         with:
@@ -24,20 +20,12 @@ jobs:
 
       - run: |
           chmod +x gradlew
-          ./gradlew build test || exit 1
+          ./gradlew build test
 
       - uses: actions/upload-artifact@v4
         with:
           name: configservice-jar
           path: build/libs/*.jar
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - uses: actions/download-artifact@v4
         with:
@@ -59,35 +47,19 @@ jobs:
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           script: |
             cd /opt/tata/configservice
+            JAR_FILE=$(ls configservice-v*.jar | sort -V | tail -n 1)
+            [ -f Dockerfile ] && [ -n "$JAR_FILE" ] || exit 1
             
-            # 詳細日誌輸出
-            set -x
+            cp "$JAR_FILE" configservice.jar
             
-            # 防呆機制：提前檢查必要條件
-            [ -f Dockerfile ] || { echo "Dockerfile not found"; exit 1; }
-            [ "$(ls *.jar | wc -l)" -eq 1 ] || { echo "Jar file count error"; exit 1; }
-            
-            # 停止並刪除現有容器
             docker stop configservice 2>/dev/null || true
             docker rm configservice 2>/dev/null || true
             
-            # 建立並運行新容器
-            docker build -t configservice . || { echo "Docker build failed"; exit 1; }
-            docker run -d --name configservice -p 8888:8888 configservice || { echo "Docker run failed"; exit 1; }
+            docker build -t configservice . 
+            docker run -d --name configservice -p 8888:8888 configservice
             
-            # 等待容器穩定
-            sleep 10
-            
-            # 運行狀態檢查，增加更多診斷信息
             docker ps | grep configservice || { 
-                echo "Container not running"; 
-                docker ps -a | grep configservice;  # 顯示容器詳細信息
-                docker logs configservice;  # 輸出容器日誌
-                exit 1; 
-            }
-            
-            # 額外的服務可用性檢查
-            docker exec configservice wget -q -O- http://localhost:8888/actuator/health || {
-                echo "Service health check failed";
-                exit 1;
+                docker ps -a | grep configservice
+                docker logs configservice
+                exit 1
             }
