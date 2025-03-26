@@ -6,12 +6,12 @@ spring:
     config:
       server:
         git:
-          uri: https://github.com/AceNexus/configservice
-          searchPaths: configs  # Git 倉庫中的相對路徑
-          clone-on-start: true
-          default-label: main  # 指定 Git 預設分支
-          timeout: 5  # 設定 Git 請求超時秒數，防止連線問題
+          uri: https://github.com/AceNexus/configservice # 配置中心 Git 儲存庫 URI
+          searchPaths: configs # 配置文件路徑
+          clone-on-start: true # 啟動時同步倉庫
+          default-label: main # 預設配置分支
+          timeout: 5 # Git 倉庫請求超時機制
   security:
     user:
-      name: ${SECURITY_USERNAME:admin}
-      password: ${SECURITY_PASSWORD:password}
+      name: ${SECURITY_USERNAME:admin} # 配置服務安全認證用戶名
+      password: ${SECURITY_PASSWORD:password}  # 配置服務安全認證密碼
