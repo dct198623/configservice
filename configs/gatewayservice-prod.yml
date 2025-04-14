@@ -9,9 +9,9 @@ spring:
         - id: gatewayservice
           uri: lb://gatewayservice
           predicates:
-            - Path=/api/v1/gateway/**
+            - Path=/api/gateway/**
           filters:
-            - StripPrefix=3 # 去掉 /api/v1/gateway 前綴
+            - StripPrefix=2 # 去掉 /api/gateway 前綴
 
 eureka:
   instance:
