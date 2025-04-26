@@ -8,8 +8,6 @@ ENV SERVER_PORT=8888
 ## 安全設定
 ENV SECURITY_USERNAME=admin
 ENV SECURITY_PASSWORD=password
-## 環境設定
-ENV SPRING_PROFILES_ACTIVE=dev
 
 # 設定工作目錄為 /app
 WORKDIR /app
