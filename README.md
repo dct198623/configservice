@@ -131,7 +131,7 @@ git push origin --tags
 
 ```shell
 # 啟動容器
-docker run -d --name=eurekaservice --network tata-network -p 8761:8761 \
+docker run -d --name=eurekaservice -p 8761:8761 \
   -e SERVER_HOST=127.0.0.1 \
   -e SERVER_PORT=8761 \
   -e SECURITY_USERNAME=admin \
@@ -147,7 +147,7 @@ docker run -d --name=eurekaservice --network tata-network -p 8761:8761 \
 
 ```shell
 # 啟動容器
-docker run -d --name=gatewayservice --network tata-network -p 8080:8080 \
+docker run -d --name=gatewayservice -p 8080:8080 \
   -e SERVER_HOST=127.0.0.1 \
   -e SERVER_PORT=8080 \
   -e SPRING_PROFILES_ACTIVE=prod \
