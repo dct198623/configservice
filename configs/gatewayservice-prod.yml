@@ -5,6 +5,9 @@ spring:
         locator:
           enabled: true # 啟用服務發現
           lower-case-service-id: true # 服務 ID 轉換為小寫
+      httpclient:
+        connect-timeout: 5000       # 連線 timeout
+        response-timeout: 10s       # 回應 timeout
       routes:
         - id: gatewayservice
           uri: lb://gatewayservice
