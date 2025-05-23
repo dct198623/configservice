@@ -117,9 +117,6 @@ git push origin --tags
      -e SERVER_PORT=8888 \
      -e SECURITY_USERNAME=admin \
      -e SECURITY_PASSWORD=password \
-     -e LINE_CHANNEL_ACCESS_TOKEN=LINE_CHANNEL_ACCESS_TOKEN \
-     -e LINE_CHANNEL_SECRET=LINE_CHANNEL_SECRET \
-     -e GROQ_API_KEY=GROQ_API_KEY \
      configservice
    ```
 
