@@ -1,0 +1,19 @@
+spring:
+  cloud:
+    config:
+      server:
+        git:
+          uri: https://github.com/AceNexus/configservice
+          clone-on-start: false
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+  security:
+    user:
+      name: admin
+      password: password
+
+encrypt:
+  key: test-encrypt-key
