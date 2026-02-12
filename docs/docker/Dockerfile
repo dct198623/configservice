@@ -5,7 +5,7 @@ FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
 # 複製編譯後的 JAR 檔案到容器內
-COPY build/libs/configservice-*.jar /app/configservice.jar
+COPY build/libs/configservice.jar /app/configservice.jar
 
 # 以 Java 啟動應用程式
 CMD ["java", "-jar", "/app/configservice.jar"]
