@@ -73,59 +73,7 @@ sequenceDiagram
 
 ## 核心專案配置
 
-### application.yml
-
-```yaml
-server:
-  port: ${SERVER_PORT:8888}
-
-spring:
-  application:
-    name: configservice
-  cloud:
-    config:
-      server:
-        git:
-          uri: ${CONFIG_GIT_URI:https://github.com/AceNexus/configservice}
-          search-paths: configs
-          username: ${CONFIG_GIT_USERNAME:}
-          password: ${CONFIG_GIT_PASSWORD:}
-          default-label: ${CONFIG_GIT_LABEL:main}
-          clone-on-start: true
-          force-pull: true
-          timeout: 5
-    bus:
-      enabled: true
-  rabbitmq:
-    host: ${RABBITMQ_HOST:localhost}
-    port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USER}
-    password: ${RABBITMQ_PASS}
-  security:
-    user:
-      name: ${SECURITY_USERNAME}
-      password: ${SECURITY_PASSWORD}
-
-encrypt:
-  key: ${ENCRYPT_KEY}
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,busrefresh
-```
-
-### build.gradle.kts
-
-```kotlin
-dependencies {
-    implementation("org.springframework.boot:spring-boot-starter-actuator")
-    implementation("org.springframework.boot:spring-boot-starter-security")
-    implementation("org.springframework.cloud:spring-cloud-config-server")
-    implementation("org.springframework.cloud:spring-cloud-starter-bus-amqp")
-}
-```
+主要配置檔為 `src/main/resources/application.yml`，依賴與建構設定見 `build.gradle.kts`。
 
 ### Git 配置檔案結構
 
@@ -233,64 +181,39 @@ spring:
 
 需要動態刷新的 Bean 標註 `@RefreshScope`，配置變更後會自動重新綁定，無需重啟服務。
 
-## Docker Compose 部署架構
+## Docker Compose 部署
 
-```yaml
-# docker-compose.yml
-services:
-  rabbitmq:
-    image: rabbitmq:3.13-management-alpine
-    container_name: rabbitmq
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    healthcheck:
-      test: [ "CMD", "rabbitmq-diagnostics", "check_port_connectivity" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+部署相關檔案位於 `docs/docker/` 目錄：
 
-  configservice:
-    build:
-      context: .
-      dockerfile: docs/docker/configservice/Dockerfile
-    container_name: configservice
-    ports:
-      - "8888:8888"
-    environment:
-      - SECURITY_USERNAME=<your-username>
-      - SECURITY_PASSWORD=<your-password>
-      - ENCRYPT_KEY=<your-master-key>
-      - RABBITMQ_HOST=rabbitmq
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    healthcheck:
-      test: [ "CMD", "wget", "-qO-", "http://${SECURITY_USERNAME}:${SECURITY_PASSWORD}@localhost:8888/actuator/health" ]
-      interval: 15s
-      timeout: 5s
-      retries: 5
+| 檔案                   | 說明                             |
+|----------------------|--------------------------------|
+| `docker-compose.yml` | 服務編排（Config Server + RabbitMQ） |
+| `.env.example`       | 環境變數範本                         |
+| `Dockerfile`         | Config Server 容器映像定義           |
 
-  # 範例：客戶端微服務
-  gatewayservice:
-    build:
-      context: ../gatewayservice
-      dockerfile: docs/docker/Dockerfile
-    container_name: gatewayservice
-    ports:
-      - "8080:8080"
-    environment:
-      - SPRING_PROFILES_ACTIVE=prod
-      - SPRING_CONFIG_IMPORT=configserver:http://configservice:8888
-      - SPRING_CLOUD_CONFIG_USERNAME=<your-username>
-      - SPRING_CLOUD_CONFIG_PASSWORD=<your-password>
-      - SPRING_RABBITMQ_HOST=rabbitmq
-    depends_on:
-      configservice:
-        condition: service_healthy
+```bash
+# 複製範本並填入實際值
+cp docs/docker/.env.example docs/docker/.env
+
+# 建構 JAR
+./gradlew bootJar
+
+# 啟動服務
+docker compose -f docs/docker/docker-compose.yml up -d
 ```
 
-所有服務透過 Docker Network 內部通訊，使用服務名稱（`configservice`、`rabbitmq`）作為主機位址，而非 `127.0.0.1`。
+### 客戶端微服務整合
+
+客戶端微服務透過 Docker Network 內部通訊，使用服務名稱（`configservice`、`rabbitmq`）作為主機位址。整合時需於客戶端設定以下環境變數：
+
+```yaml
+environment:
+  - SPRING_PROFILES_ACTIVE=prod
+  - SPRING_CONFIG_IMPORT=configserver:http://configservice:8888
+  - SPRING_CLOUD_CONFIG_USERNAME=${SECURITY_USERNAME}
+  - SPRING_CLOUD_CONFIG_PASSWORD=${SECURITY_PASSWORD}
+  - SPRING_RABBITMQ_HOST=rabbitmq
+```
 
 ## 環境變數
 
@@ -302,7 +225,6 @@ services:
 | `CONFIG_GIT_URI`      | `https://github.com/AceNexus/configservice` | 配置檔 Git 儲存庫位址             |
 | `CONFIG_GIT_USERNAME` | -                                           | Git 帳號（私有儲存庫需提供）          |
 | `CONFIG_GIT_PASSWORD` | -                                           | Git Personal Access Token |
-| `CONFIG_GIT_LABEL`    | `main`                                      | Git 預設分支                  |
 | `ENCRYPT_KEY`         | 必填                                          | JCE 對稱加密主密鑰               |
 | `RABBITMQ_HOST`       | `localhost`                                 | RabbitMQ 主機位址             |
 | `RABBITMQ_PORT`       | `5672`                                      | RabbitMQ 連接埠              |

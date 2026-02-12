@@ -6,18 +6,6 @@ plugins {
 
 group = "com.acenexus.tata"
 
-// 讀取 Git Tag 作為 version，沒有 Tag 時預設為 0.0.1-SNAPSHOT
-val gitVersion: String by lazy {
-    try {
-        val process = ProcessBuilder("git", "describe", "--tags", "--abbrev=0").start()
-        process.inputStream.bufferedReader().readText().trim()
-    } catch (e: Exception) {
-        "0.0.1-SNAPSHOT"
-    }
-}
-
-version = gitVersion
-
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
@@ -54,7 +42,8 @@ tasks.jar {
     enabled = false
 }
 
-// 保持 bootJar 任務可用
+// 保持 bootJar 任務可用，固定輸出檔名確保 Dockerfile COPY 路徑一致
 tasks.bootJar {
     enabled = true
+    archiveFileName.set("configservice.jar")
 }

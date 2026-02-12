@@ -24,6 +24,14 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+    # 健康檢查：透過 Spring Boot Actuator 確認應用程式是否正常運作
+    # 其他服務可透過 depends_on + condition: service_healthy 等待此服務就緒後再啟動
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8888/actuator/health" ]
+      interval: 15s       # 每 15 秒檢查一次
+      timeout: 5s         # 單次檢查超過 5 秒視為失敗
+      retries: 5          # 連續 5 次失敗則標記為 unhealthy
+      start_period: 30s   # 容器啟動後等待 30 秒再開始檢查（預留 JVM 啟動時間）
     restart: unless-stopped
 
   rabbitmq:
@@ -35,9 +43,11 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+    # 健康檢查：確認 RabbitMQ 的 AMQP 連接埠（5672）可正常連線
+    # configservice 透過 depends_on + condition: service_healthy 等待 RabbitMQ 就緒後再啟動
     healthcheck:
       test: [ "CMD", "rabbitmq-diagnostics", "check_port_connectivity" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 10s       # 每 10 秒檢查一次
+      timeout: 5s         # 單次檢查超過 5 秒視為失敗
+      retries: 5          # 連續 5 次失敗則標記為 unhealthy
     restart: unless-stopped
