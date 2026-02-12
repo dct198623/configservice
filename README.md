@@ -7,173 +7,334 @@
 
 ## 概述
 
-Config Service 是基於 Spring Cloud Config Server 的配置中心，提供微服務架構中的集中式配置管理解決方案。主要特點包括：
+採用 Spring Cloud Config Server 作為微服務架構的集中式配置中心。主要特點：
 
-- **集中管理配置**：統一存儲所有微服務的配置設定
-- **動態更新**：支持配置的即時更新，無需重啟服務
-- **版本控制**：通過 Git 儲存配置，支持版本控制與變更歷史追蹤
-- **環境隔離**：支持 dev、test、prod 等多環境配置隔離
-- **安全保護**：整合 Spring Security 確保配置安全存取
+- **Git 版本控制**：配置檔存放於 Git 儲存庫，支援變更歷史追蹤與分支管理
+- **環境隔離**：透過 `{application}-{profile}.yml` 命名規則區分 dev、prod 等環境
+- **敏感資訊加密**：整合 JCE 對稱加密，保護資料庫密碼、API Key 等機敏資料
+- **零停機更新**：透過 Spring Cloud Bus + RabbitMQ 動態刷新配置，無需重啟服務
+- **安全存取**：Spring Security Basic Auth 保護所有配置端點
 
 ## 技術堆疊
 
-1. **框架**: Spring Boot 3.4.3
-2. **配置中心**: Spring Cloud Config Server 2024.0.0
-3. **Java 版本**: Java 21
-4. **安全框架**: Spring Security
-5. **監控**: Spring Boot Actuator
-6. **構建工具**: Gradle (Kotlin DSL)
-7. **版本控制**: 自動從 Git Tag 獲取版本號
+- **核心框架**：Java 21 / Spring Boot 3.4.3
+- **配置中心**：Spring Cloud Config Server 2024.0.0
+- **事件匯流排**：Spring Cloud Bus（AMQP / RabbitMQ）
+- **安全機制**：Spring Security（Basic Auth）/ JCE 對稱加密
+- **建構工具**：Gradle 8.12.1（Kotlin DSL）
+- **容器化部署**：Docker（Alpine JRE 21）
 
 ## 系統架構
 
-### 1. 訪問配置
+### 階段 1：微服務啟動的配置初始化
 
-透過 RESTful API 存取配置，需先通過身份驗證。
-
-```
-http://{host}:8888/{application}/{profile}
-```
-
-- `{host}`: 配置中心所在主機位址（例如：127.0.0.1）
-- `{application}`: 應用名稱
-- `{profile}`: 環境設定（dev、test、prod 等）
-
-### 2. 範例請求
-
-- 取得 eurekaservice 的 dev 環境配置
-```
-http://127.0.0.1:8888/eurekaservice/dev
+```mermaid
+sequenceDiagram
+    participant MS as 微服務
+    participant CS as Config Server
+    participant Git as Git Repository
+    MS ->> CS: 請求配置 (application/profile)
+    CS ->> Git: 拉取配置文件
+    Git -->> CS: 返回配置文件
+    CS -->> MS: 返回配置（自動解密 {cipher} 欄位）
+    Note over MS: 載入配置並完成啟動
 ```
 
-- 此請求對應至的設定檔案位置 [eurekaservice-dev.yml](configs%2Feurekaservice-dev.yml)
+### 階段 2：配置動態更新
 
-### 3. 健康檢查與監控
+管理員將配置變更 Push 至 Git Repository 後，觸發刷新流程：
 
-使用 Spring Boot Actuator 提供的健康檢查端點：
+```mermaid
+sequenceDiagram
+    participant Admin as 管理員 / CI Pipeline
+    participant CS as Config Server
+    participant MQ as RabbitMQ
+    participant MSA as Microservice A
+    participant MSB as Microservice B
+    Admin ->> CS: POST /actuator/busrefresh
+    CS ->> MQ: 發布刷新事件
+
+    par RabbitMQ 廣播至所有微服務
+        MQ ->> MSA: 刷新事件
+        MQ ->> MSB: 刷新事件
+    end
+
+    Note over CS, MSB: 以下為各微服務被動觸發，與上方流程獨立
+
+    par 各微服務獨立重新拉取配置
+        MSA ->> CS: 請求最新配置
+        CS -->> MSA: 返回新配置
+        MSB ->> CS: 請求最新配置
+        CS -->> MSB: 返回新配置
+    end
+
+    Note over MSA, MSB: 各自重新綁定 @RefreshScope Bean
+```
+
+## 核心專案配置
+
+### application.yml
+
+```yaml
+server:
+  port: ${SERVER_PORT:8888}
+
+spring:
+  application:
+    name: configservice
+  cloud:
+    config:
+      server:
+        git:
+          uri: ${CONFIG_GIT_URI:https://github.com/AceNexus/configservice}
+          search-paths: configs
+          username: ${CONFIG_GIT_USERNAME:}
+          password: ${CONFIG_GIT_PASSWORD:}
+          default-label: ${CONFIG_GIT_LABEL:main}
+          clone-on-start: true
+          force-pull: true
+          timeout: 5
+    bus:
+      enabled: true
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER}
+    password: ${RABBITMQ_PASS}
+  security:
+    user:
+      name: ${SECURITY_USERNAME}
+      password: ${SECURITY_PASSWORD}
+
+encrypt:
+  key: ${ENCRYPT_KEY}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,busrefresh
+```
+
+### build.gradle.kts
+
+```kotlin
+dependencies {
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("org.springframework.boot:spring-boot-starter-security")
+    implementation("org.springframework.cloud:spring-cloud-config-server")
+    implementation("org.springframework.cloud:spring-cloud-starter-bus-amqp")
+}
+```
+
+### Git 配置檔案結構
+
+配置檔存放於 Git 儲存庫的 `configs/` 目錄，命名規則為 `{application}-{profile}.yml`：
 
 ```
-http://localhost:8888/actuator/health
+configs/
+└── gatewayservice-prod.yml # Gateway 生產環境配置
 ```
 
-## 快速入門
-
-### Config 客戶端初始化步驟
-
-1. **添加依賴**：
-   ```kotlin
-   dependencies {
-       implementation("org.springframework.cloud:spring-cloud-starter-config")
-       implementation("org.springframework.cloud:spring-cloud-starter-bootstrap")
-   }
-   ```
-
-2. **配置 bootstrap.yml**：
-   ```yaml
-   spring:
-     cloud:
-       config:
-         name: ${服務名稱} # 例如：eurekaservice
-         profile: dev # 環境設定：dev、test、prod 等
-         uri: http://localhost:8888/ # 配置服務的 URI
-         fail-fast: true # 如果連線失敗立即報錯
-   ```
-
-## 部署指南
-
-### 1. 自動部署 (GitHub Actions)
+配置取得端點：`GET /{application}/{profile}[/{label}]`
 
 ```bash
-git checkout main
-git pull --rebase origin main
-git tag -a v0.0.1 -m "v0.0.1"
-git push origin --tags
+# 取得 gatewayservice 的 prod 配置
+curl -u <username>:<password> http://localhost:8888/gatewayservice/prod
 ```
 
-### 2. 手動部署
+## 安全加密指南
 
-1. **建立資料夾**：
-   ```shell
-   sudo mkdir -p /opt/tata/configservice
-   ```
+使用 JCE 對稱加密保護敏感資訊。Config Server 透過 `ENCRYPT_KEY` 環境變數設定主密鑰，提供 `/encrypt` 與 `/decrypt` 端點。
 
-2. **放置 JAR 文件**：將 configservice.jar 放入 /opt/tata/configservice
+### 加密操作流程
 
-3. **建立 Dockerfile **：[參考範例](docs%2Fdocker%2Fconfigservice%2FDockerfile)
-   ```shell
-   sudo touch /opt/tata/configservice/Dockerfile
-   sudo chown -R ubuntu:ubuntu /opt/tata/configservice/Dockerfile
-   ```
+**1. 驗證加密環境**
 
-4. **建構與啟動**：
-   ```shell
-   cd /opt/tata/configservice
-   docker build --no-cache -t configservice .
-   
-   # 啟動容器（含環境變數設定）
-   docker run -di --name=configservice \
-     -p 8888:8888 \
-     -e SERVER_HOST=127.0.0.1 \
-     -e SERVER_PORT=8888 \
-     -e SECURITY_USERNAME=admin \
-     -e SECURITY_PASSWORD=password \
-     configservice
-   ```
-
-5. **確認狀態**：
-   ```shell
-   docker logs -f --tail 1000 configservice
-   ```
-
-### 3. 其他服務啟動命令
-
-#### Eureka Service
-
-```shell
-# 啟動容器
-docker run -d --name=eurekaservice -p 8761:8761 \
-  -e SERVER_HOST=127.0.0.1 \
-  -e SERVER_PORT=8761 \
-  -e SECURITY_USERNAME=admin \
-  -e SECURITY_PASSWORD=password \
-  -e SPRING_PROFILES_ACTIVE=prod \
-  -e CONFIG_SERVER_USERNAME=admin \
-  -e CONFIG_SERVER_PASSWORD=password \
-  -e CONFIG_SERVER_URI=http://configservice:8888 \
-  eurekaservice
+```bash
+curl -u <username>:<password> http://localhost:8888/encrypt/status
+# 預期回應：{"status":"OK"}
 ```
 
-#### API Gateway
+**2. 加密明文**
 
-```shell
-# 啟動容器
-docker run -d --name=gatewayservice -p 8080:8080 \
-  -e SERVER_HOST=127.0.0.1 \
-  -e SERVER_PORT=8080 \
-  -e SPRING_PROFILES_ACTIVE=prod \
-  -e CONFIG_SERVER_USERNAME=admin \
-  -e CONFIG_SERVER_PASSWORD=password \
-  -e CONFIG_SERVER_URI=http://127.0.0.1:8888 \
-  -e EUREKA_SERVER_HOST=127.0.0.1 \
-  -e EUREKA_SERVER_PORT=8761 \
-  gatewayservice
+```bash
+curl -u <username>:<password> -X POST http://localhost:8888/encrypt -d "MyDatabasePassword"
+# 回傳密文：AQBkNpQqxT8vZ3mK1lO...
 ```
 
-## 版本管理
+**3. 在 Git 配置檔中使用密文**
 
-版本號採用語義化版本規範 (Semantic Versioning)：
+```yaml
+spring:
+  datasource:
+    password: '{cipher}AQBkNpQqxT8vZ3mK1lO...'
+```
 
-- **MAJOR**: 不兼容的重大變更（例：1.0.0 → 2.0.0）
-- **MINOR**: 新增功能，向下相容（例：1.1.0 → 1.2.0）
-- **PATCH**: 修正錯誤，無功能變化（例：1.2.1 → 1.2.2）
+**4. 驗證解密**
 
-## 常見問題
+```bash
+curl -u <username>:<password> -X POST http://localhost:8888/decrypt -d "AQBkNpQqxT8vZ3mK1lO..."
+# 回傳明文：MyDatabasePassword
+```
 
-1. **連接配置中心失敗？**
-   - 檢查網路連接
-   - 驗證帳號密碼設定
-   - 確認配置中心服務是否正常運行
+微服務向 Config Server 請求配置時，`{cipher}` 前綴的欄位會在 Config Server 端自動解密後返回明文，客戶端無需處理解密邏輯。
+
+## 零停機刷新流程
+
+透過 Spring Cloud Bus + RabbitMQ，配置變更後無需重啟任何微服務。
+
+### 操作步驟
+
+1. 將配置變更 Push 至 Git Repository
+2. 向 Config Server 發送刷新請求：
+
+```bash
+# 刷新所有微服務
+curl -u <username>:<password> -X POST http://localhost:8888/actuator/busrefresh
+
+# 刷新特定服務
+curl -u <username>:<password> -X POST http://localhost:8888/actuator/busrefresh/gatewayservice:**
+```
+
+### 客戶端前提條件
+
+客戶端微服務必須使用 `spring.config.import`（非舊式 bootstrap.yml）接入 Config Server：
+
+```kotlin
+// build.gradle.kts
+dependencies {
+    implementation("org.springframework.cloud:spring-cloud-starter-config")
+    implementation("org.springframework.cloud:spring-cloud-starter-bus-amqp")  // 動態刷新需要
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+}
+```
+
+```yaml
+# application.yml
+spring:
+  application:
+    name: gatewayservice                                  # 對應 Git 配置檔的 {application}
+  config:
+    import: "configserver:http://configservice:8888"      # Config Server 位址
+  cloud:
+    config:
+      username: ${SPRING_CLOUD_CONFIG_USERNAME}
+      password: ${SPRING_CLOUD_CONFIG_PASSWORD}
+      fail-fast: true                                     # 連線失敗時拒絕啟動
+    bus:
+      enabled: true                                       # 啟用 Bus 事件監聽
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER}
+    password: ${RABBITMQ_PASS}
+```
+
+需要動態刷新的 Bean 標註 `@RefreshScope`，配置變更後會自動重新綁定，無需重啟服務。
+
+## Docker Compose 部署架構
+
+```yaml
+# docker-compose.yml
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "check_port_connectivity" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  configservice:
+    build:
+      context: .
+      dockerfile: docs/docker/configservice/Dockerfile
+    container_name: configservice
+    ports:
+      - "8888:8888"
+    environment:
+      - SECURITY_USERNAME=<your-username>
+      - SECURITY_PASSWORD=<your-password>
+      - ENCRYPT_KEY=<your-master-key>
+      - RABBITMQ_HOST=rabbitmq
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://${SECURITY_USERNAME}:${SECURITY_PASSWORD}@localhost:8888/actuator/health" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # 範例：客戶端微服務
+  gatewayservice:
+    build:
+      context: ../gatewayservice
+      dockerfile: docs/docker/Dockerfile
+    container_name: gatewayservice
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_CONFIG_IMPORT=configserver:http://configservice:8888
+      - SPRING_CLOUD_CONFIG_USERNAME=<your-username>
+      - SPRING_CLOUD_CONFIG_PASSWORD=<your-password>
+      - SPRING_RABBITMQ_HOST=rabbitmq
+    depends_on:
+      configservice:
+        condition: service_healthy
+```
+
+所有服務透過 Docker Network 內部通訊，使用服務名稱（`configservice`、`rabbitmq`）作為主機位址，而非 `127.0.0.1`。
+
+## 環境變數
+
+| 變數                    | 預設值                                         | 說明                        |
+|-----------------------|---------------------------------------------|---------------------------|
+| `SERVER_PORT`         | `8888`                                      | 服務埠號                      |
+| `SECURITY_USERNAME`   | 必填                                          | Basic Auth 帳號             |
+| `SECURITY_PASSWORD`   | 必填                                          | Basic Auth 密碼             |
+| `CONFIG_GIT_URI`      | `https://github.com/AceNexus/configservice` | 配置檔 Git 儲存庫位址             |
+| `CONFIG_GIT_USERNAME` | -                                           | Git 帳號（私有儲存庫需提供）          |
+| `CONFIG_GIT_PASSWORD` | -                                           | Git Personal Access Token |
+| `CONFIG_GIT_LABEL`    | `main`                                      | Git 預設分支                  |
+| `ENCRYPT_KEY`         | 必填                                          | JCE 對稱加密主密鑰               |
+| `RABBITMQ_HOST`       | `localhost`                                 | RabbitMQ 主機位址             |
+| `RABBITMQ_PORT`       | `5672`                                      | RabbitMQ 連接埠              |
+| `RABBITMQ_USER`       | 必填                                          | RabbitMQ 帳號               |
+| `RABBITMQ_PASS`       | 必填                                          | RabbitMQ 密碼               |
+
+## API 端點
+
+| 端點                                   | 方法   | 說明         |
+|--------------------------------------|------|------------|
+| `/{application}/{profile}`           | GET  | 取得配置       |
+| `/encrypt`                           | POST | 加密明文       |
+| `/decrypt`                           | POST | 解密密文       |
+| `/encrypt/status`                    | GET  | 加密環境狀態     |
+| `/actuator/health`                   | GET  | 健康檢查       |
+| `/actuator/busrefresh`               | POST | 觸發全域配置刷新   |
+| `/actuator/busrefresh/{destination}` | POST | 觸發特定服務配置刷新 |
+
+## 常用運維 Docker 指令
+
+| 指令                                                     | 說明                    |
+|--------------------------------------------------------|-----------------------|
+| `docker compose up -d`                                 | 啟動所有服務                |
+| `docker compose down`                                  | 停止並移除所有容器             |
+| `docker compose logs -f configservice`                 | 即時查看 Config Server 日誌 |
+| `docker compose restart configservice`                 | 重啟 Config Server      |
+| `docker compose ps`                                    | 查看所有容器狀態              |
+| `docker exec -it rabbitmq rabbitmq-diagnostics status` | 檢查 RabbitMQ 狀態        |
+| `docker compose build --no-cache configservice`        | 重新建構映像（不使用快取）         |
 
 ## 參考資源
 
-- [Spring Cloud Config 文檔](https://docs.spring.io/spring-cloud-config/docs/current/reference/html/)
+- [Spring Cloud Config 官方文件](https://docs.spring.io/spring-cloud-config/docs/current/reference/html/)
+- [Spring Cloud Bus 官方文件](https://docs.spring.io/spring-cloud-bus/docs/current/reference/html/)
+- [RabbitMQ 管理指南](https://www.rabbitmq.com/management.html)
