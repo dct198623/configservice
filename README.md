@@ -5,28 +5,43 @@
 ![Java Version](https://img.shields.io/badge/Java-21-orange.svg)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)
 
-## 概述
+微服務生態系的集中式配置中心，基於 Spring Cloud Config Server。從 Git 儲存庫讀取配置檔，透過 REST API 提供給各微服務，支援
+JCE 加密與 Spring Cloud Bus 動態刷新。
 
-採用 Spring Cloud Config Server 作為微服務架構的集中式配置中心。主要特點：
+## 快速開始
 
-- **Git 版本控制**：配置檔存放於 Git 儲存庫，支援變更歷史追蹤與分支管理
-- **環境隔離**：透過 `{application}-{profile}.yml` 命名規則區分 dev、prod 等環境
-- **敏感資訊加密**：整合 JCE 對稱加密，保護資料庫密碼、API Key 等機敏資料
-- **零停機更新**：透過 Spring Cloud Bus + RabbitMQ 動態刷新配置，無需重啟服務
-- **安全存取**：Spring Security Basic Auth 保護所有配置端點
+### 前置需求
 
-## 技術堆疊
+- Java 21
+- Docker Desktop
 
-- **核心框架**：Java 21 / Spring Boot 3.4.3
-- **配置中心**：Spring Cloud Config Server 2024.0.0
-- **事件匯流排**：Spring Cloud Bus（AMQP / RabbitMQ）
-- **安全機制**：Spring Security（Basic Auth）/ JCE 對稱加密
-- **建構工具**：Gradle 8.12.1（Kotlin DSL）
-- **容器化部署**：Docker（Alpine JRE 21）
+### 使用 IntelliJ IDEA
+
+1. 啟動本地 RabbitMQ（首次執行即可，之後會自動隨 Docker Desktop 啟動）：
+   ```bash
+   docker run -d --name rabbitmq --restart unless-stopped -p 5672:5672 -p 15672:15672 rabbitmq:3-management-alpine
+   ```
+2. `File` → `Open` → 選擇專案根目錄，等待 Gradle 同步完成
+3. `Run` → `Edit Configurations` → `ConfigserviceApplication` → `Environment variables`
+4. 輸入框貼上：`SECURITY_USERNAME=admin;SECURITY_PASSWORD=password;ENCRYPT_KEY=my-secret-key;RABBITMQ_USER=guest;RABBITMQ_PASS=guest`
+
+   | 變數 | 開發用值 |
+   |---|---|
+   | `SECURITY_USERNAME` | `admin` |
+   | `SECURITY_PASSWORD` | `password` |
+   | `ENCRYPT_KEY` | `my-secret-key` |
+   | `RABBITMQ_USER` | `guest` |
+   | `RABBITMQ_PASS` | `guest` |
+
+5. 點擊 `ConfigserviceApplication` 旁的 ▶ 啟動
+6. 開啟 http://localhost:8888/actuator/health 確認回傳 `{"status":"UP"}`
+
 
 ## 系統架構
 
-### 階段 1：微服務啟動的配置初始化
+### 配置初始化
+
+微服務啟動時向 Config Server 請求配置，Config Server 從 Git 拉取後回傳（自動解密 `{cipher}` 欄位）：
 
 ```mermaid
 sequenceDiagram
@@ -40,120 +55,115 @@ sequenceDiagram
     Note over MS: 載入配置並完成啟動
 ```
 
-### 階段 2：配置動態更新
+### 動態刷新
 
-管理員將配置變更 Push 至 Git Repository 後，觸發刷新流程：
+配置變更 Push 至 Git 後，透過 `POST /actuator/busrefresh` 觸發 RabbitMQ 廣播，所有微服務自動拉取新配置，無需重啟：
 
 ```mermaid
 sequenceDiagram
-    participant Admin as 管理員 / CI Pipeline
+    participant Admin as 管理員
     participant CS as Config Server
     participant MQ as RabbitMQ
     participant MSA as Microservice A
     participant MSB as Microservice B
     Admin ->> CS: POST /actuator/busrefresh
     CS ->> MQ: 發布刷新事件
-
-    par RabbitMQ 廣播至所有微服務
+    par
         MQ ->> MSA: 刷新事件
         MQ ->> MSB: 刷新事件
     end
-
-    Note over CS, MSB: 以下為各微服務被動觸發，與上方流程獨立
-
-    par 各微服務獨立重新拉取配置
+    par
         MSA ->> CS: 請求最新配置
-        CS -->> MSA: 返回新配置
         MSB ->> CS: 請求最新配置
-        CS -->> MSB: 返回新配置
     end
-
-    Note over MSA, MSB: 各自重新綁定 @RefreshScope Bean
+    Note over MSA, MSB: 重新綁定 @RefreshScope Bean
 ```
 
-## 核心專案配置
-
-主要配置檔為 `src/main/resources/application.yml`，依賴與建構設定見 `build.gradle.kts`。
-
-### Git 配置檔案結構
+### 配置檔結構
 
 配置檔存放於 Git 儲存庫的 `configs/` 目錄，命名規則為 `{application}-{profile}.yml`：
 
 ```
 configs/
-└── gatewayservice-prod.yml # Gateway 生產環境配置
+└── gatewayservice-prod.yml    # Gateway 生產環境配置
 ```
 
-配置取得端點：`GET /{application}/{profile}[/{label}]`
+## API 端點
+
+| 端點                                   | 方法   | 說明         | 認證  |
+|--------------------------------------|------|------------|-----|
+| `/{application}/{profile}`           | GET  | 取得配置       | 需要  |
+| `/encrypt`                           | POST | 加密明文       | 需要  |
+| `/decrypt`                           | POST | 解密密文       | 需要  |
+| `/encrypt/status`                    | GET  | 加密環境狀態     | 需要  |
+| `/actuator/health`                   | GET  | 健康檢查       | 不需要 |
+| `/actuator/busrefresh`               | POST | 觸發全域配置刷新   | 需要  |
+| `/actuator/busrefresh/{destination}` | POST | 觸發特定服務配置刷新 | 需要  |
+
+需認證的端點皆使用 HTTP Basic Auth（`SECURITY_USERNAME` / `SECURITY_PASSWORD`）。
+
+## 環境變數
+
+| 變數                    | 預設值                                         | 說明                        |
+|-----------------------|---------------------------------------------|---------------------------|
+| `SECURITY_USERNAME`   | 必填                                          | Basic Auth 帳號             |
+| `SECURITY_PASSWORD`   | 必填                                          | Basic Auth 密碼             |
+| `ENCRYPT_KEY`         | 必填                                          | JCE 對稱加密主密鑰               |
+| `RABBITMQ_USER`       | 必填                                          | RabbitMQ 帳號               |
+| `RABBITMQ_PASS`       | 必填                                          | RabbitMQ 密碼               |
+| `RABBITMQ_HOST`       | `localhost`                                 | RabbitMQ 主機位址             |
+| `RABBITMQ_PORT`       | `5672`                                      | RabbitMQ 連接埠              |
+| `SERVER_PORT`         | `8888`                                      | 服務埠號                      |
+| `CONFIG_GIT_URI`      | `https://github.com/AceNexus/configservice` | 配置檔 Git 儲存庫位址             |
+| `CONFIG_GIT_USERNAME` | -                                           | Git 帳號（私有儲存庫需提供）          |
+| `CONFIG_GIT_PASSWORD` | -                                           | Git Personal Access Token |
+
+## 操作指南
+
+### 加密敏感資訊
 
 ```bash
-# 取得 gatewayservice 的 prod 配置
-curl -u <username>:<password> http://localhost:8888/gatewayservice/prod
-```
-
-## 安全加密指南
-
-使用 JCE 對稱加密保護敏感資訊。Config Server 透過 `ENCRYPT_KEY` 環境變數設定主密鑰，提供 `/encrypt` 與 `/decrypt` 端點。
-
-### 加密操作流程
-
-**1. 驗證加密環境**
-
-```bash
+# 1. 確認加密環境正常
 curl -u <username>:<password> http://localhost:8888/encrypt/status
-# 預期回應：{"status":"OK"}
-```
+# {"status":"OK"}
 
-**2. 加密明文**
-
-```bash
+# 2. 加密
 curl -u <username>:<password> -X POST http://localhost:8888/encrypt -d "MyDatabasePassword"
-# 回傳密文：AQBkNpQqxT8vZ3mK1lO...
-```
+# AQBkNpQqxT8vZ3mK1lO...
 
-**3. 在 Git 配置檔中使用密文**
+# 3. 寫入配置檔
+# spring:
+#   datasource:
+#     password: '{cipher}AQBkNpQqxT8vZ3mK1lO...'
 
-```yaml
-spring:
-  datasource:
-    password: '{cipher}AQBkNpQqxT8vZ3mK1lO...'
-```
-
-**4. 驗證解密**
-
-```bash
+# 4. 驗證解密
 curl -u <username>:<password> -X POST http://localhost:8888/decrypt -d "AQBkNpQqxT8vZ3mK1lO..."
-# 回傳明文：MyDatabasePassword
+# MyDatabasePassword
 ```
 
-微服務向 Config Server 請求配置時，`{cipher}` 前綴的欄位會在 Config Server 端自動解密後返回明文，客戶端無需處理解密邏輯。
+微服務請求配置時，`{cipher}` 前綴的欄位會在 Config Server 端自動解密後返回明文。
 
-## 零停機刷新流程
-
-透過 Spring Cloud Bus + RabbitMQ，配置變更後無需重啟任何微服務。
-
-### 操作步驟
-
-1. 將配置變更 Push 至 Git Repository
-2. 向 Config Server 發送刷新請求：
+### 動態刷新配置
 
 ```bash
-# 刷新所有微服務
+# 1. 將配置變更 Push 至 Git
+
+# 2. 觸發刷新
 curl -u <username>:<password> -X POST http://localhost:8888/actuator/busrefresh
 
 # 刷新特定服務
 curl -u <username>:<password> -X POST http://localhost:8888/actuator/busrefresh/gatewayservice:**
 ```
 
-### 客戶端前提條件
+### 客戶端微服務整合
 
-客戶端微服務必須使用 `spring.config.import`（非舊式 bootstrap.yml）接入 Config Server：
+客戶端需加入以下依賴與配置：
 
 ```kotlin
 // build.gradle.kts
 dependencies {
     implementation("org.springframework.cloud:spring-cloud-starter-config")
-    implementation("org.springframework.cloud:spring-cloud-starter-bus-amqp")  // 動態刷新需要
+    implementation("org.springframework.cloud:spring-cloud-starter-bus-amqp")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
 }
 ```
@@ -162,16 +172,16 @@ dependencies {
 # application.yml
 spring:
   application:
-    name: gatewayservice                                  # 對應 Git 配置檔的 {application}
+    name: gatewayservice                                  # 對應 configs/ 中的 {application}
   config:
-    import: "configserver:http://configservice:8888"      # Config Server 位址
+    import: "configserver:http://configservice:8888"
   cloud:
     config:
       username: ${SPRING_CLOUD_CONFIG_USERNAME}
       password: ${SPRING_CLOUD_CONFIG_PASSWORD}
-      fail-fast: true                                     # 連線失敗時拒絕啟動
+      fail-fast: true
     bus:
-      enabled: true                                       # 啟用 Bus 事件監聽
+      enabled: true
   rabbitmq:
     host: ${RABBITMQ_HOST}
     port: ${RABBITMQ_PORT:5672}
@@ -179,32 +189,7 @@ spring:
     password: ${RABBITMQ_PASS}
 ```
 
-需要動態刷新的 Bean 標註 `@RefreshScope`，配置變更後會自動重新綁定，無需重啟服務。
-
-## Docker Compose 部署
-
-部署相關檔案位於 `docs/docker/` 目錄：
-
-| 檔案                   | 說明                             |
-|----------------------|--------------------------------|
-| `docker-compose.yml` | 服務編排（Config Server + RabbitMQ） |
-| `.env.example`       | 環境變數範本                         |
-| `Dockerfile`         | Config Server 容器映像定義           |
-
-```bash
-# 複製範本並填入實際值
-cp docs/docker/.env.example docs/docker/.env
-
-# 建構 JAR
-./gradlew bootJar
-
-# 啟動服務
-docker compose -f docs/docker/docker-compose.yml up -d
-```
-
-### 客戶端微服務整合
-
-客戶端微服務透過 Docker Network 內部通訊，使用服務名稱（`configservice`、`rabbitmq`）作為主機位址。整合時需於客戶端設定以下環境變數：
+Docker Compose 整合時，使用服務名稱作為主機位址：
 
 ```yaml
 environment:
@@ -215,45 +200,104 @@ environment:
   - SPRING_RABBITMQ_HOST=rabbitmq
 ```
 
-## 環境變數
+需要動態刷新的 Bean 標註 `@RefreshScope`，配置變更後會自動重新綁定。
 
-| 變數                    | 預設值                                         | 說明                        |
-|-----------------------|---------------------------------------------|---------------------------|
-| `SERVER_PORT`         | `8888`                                      | 服務埠號                      |
-| `SECURITY_USERNAME`   | 必填                                          | Basic Auth 帳號             |
-| `SECURITY_PASSWORD`   | 必填                                          | Basic Auth 密碼             |
-| `CONFIG_GIT_URI`      | `https://github.com/AceNexus/configservice` | 配置檔 Git 儲存庫位址             |
-| `CONFIG_GIT_USERNAME` | -                                           | Git 帳號（私有儲存庫需提供）          |
-| `CONFIG_GIT_PASSWORD` | -                                           | Git Personal Access Token |
-| `ENCRYPT_KEY`         | 必填                                          | JCE 對稱加密主密鑰               |
-| `RABBITMQ_HOST`       | `localhost`                                 | RabbitMQ 主機位址             |
-| `RABBITMQ_PORT`       | `5672`                                      | RabbitMQ 連接埠              |
-| `RABBITMQ_USER`       | 必填                                          | RabbitMQ 帳號               |
-| `RABBITMQ_PASS`       | 必填                                          | RabbitMQ 密碼               |
+## 部署
 
-## API 端點
+以下指令在**部署目標主機**上執行，需已安裝 Docker 與 Docker Compose。Windows 和 Linux 流程一致。
 
-| 端點                                   | 方法   | 說明         |
-|--------------------------------------|------|------------|
-| `/{application}/{profile}`           | GET  | 取得配置       |
-| `/encrypt`                           | POST | 加密明文       |
-| `/decrypt`                           | POST | 解密密文       |
-| `/encrypt/status`                    | GET  | 加密環境狀態     |
-| `/actuator/health`                   | GET  | 健康檢查       |
-| `/actuator/busrefresh`               | POST | 觸發全域配置刷新   |
-| `/actuator/busrefresh/{destination}` | POST | 觸發特定服務配置刷新 |
+### 部署目錄結構
 
-## 常用運維 Docker 指令
+將以下四個檔案放在同一個目錄下：
 
-| 指令                                                     | 說明                    |
-|--------------------------------------------------------|-----------------------|
-| `docker compose up -d`                                 | 啟動所有服務                |
-| `docker compose down`                                  | 停止並移除所有容器             |
-| `docker compose logs -f configservice`                 | 即時查看 Config Server 日誌 |
-| `docker compose restart configservice`                 | 重啟 Config Server      |
-| `docker compose ps`                                    | 查看所有容器狀態              |
-| `docker exec -it rabbitmq rabbitmq-diagnostics status` | 檢查 RabbitMQ 狀態        |
-| `docker compose build --no-cache configservice`        | 重新建構映像（不使用快取）         |
+```
+/opt/configservice/              # Linux 範例路徑（Windows 可自訂）
+├── configservice.jar            # 編譯產出
+├── Dockerfile                   # 來源：docs/docker/Dockerfile
+├── docker-compose.yml           # 來源：docs/docker/docker-compose.yml
+└── .env                         # 來源：docs/docker/.env.example（填入實際值）
+```
+
+### 首次部署
+
+1. 在專案開發機編譯 JAR：
+   ```bash
+   ./gradlew bootJar
+   ```
+2. 將 `build/libs/configservice.jar`、`docs/docker/Dockerfile`、`docs/docker/docker-compose.yml`、`docs/docker/.dockerignore`、`docs/docker/.env.example` 複製到部署主機的同一目錄
+3. 將 `.env.example` 改名為 `.env`，填入實際的帳號密碼與加密金鑰
+4. 在該目錄下啟動：
+   ```bash
+   docker compose up -d
+   ```
+
+### 更新版本
+
+1. 在開發機重新編譯 JAR
+2. 將新的 `configservice.jar` 複製到部署目錄，覆蓋舊檔
+3. 重新建構並啟動：
+   ```bash
+   docker compose up -d --build
+   ```
+
+### 驗證
+
+部署完成後確認服務狀態（`<username>` / `<password>` 為 `.env` 中設定的值）：
+
+```bash
+docker compose ps
+curl http://localhost:8888/actuator/health
+curl -u <username>:<password> http://localhost:8888/gatewayservice/prod
+```
+
+### 常用維運指令
+
+| 指令                                            | 說明        |
+|-----------------------------------------------|-----------|
+| `docker compose logs -f configservice`        | 即時查看日誌    |
+| `docker compose restart configservice`        | 重啟服務      |
+| `docker compose down`                         | 停止並移除所有容器 |
+| `docker compose build --no-cache`             | 重新建構映像    |
+
+## 版本管理
+
+本專案採用 [Semantic Versioning](https://semver.org/)，以 **Git Tag 作為唯一版本來源**。`build.gradle.kts` 建構時自動讀取最近的
+Tag 作為版本號，無 Tag 則為 `0.0.1-SNAPSHOT`。
+
+### 版號規則
+
+| 版號位置  | 何時遞增         | 範例                  |
+|-------|--------------|---------------------|
+| MAJOR | 重大架構變更、技術棧升級 | `v1.0.0` → `v2.0.0` |
+| MINOR | 新增功能、配置結構調整  | `v1.0.0` → `v1.1.0` |
+| PATCH | Bug 修復、小幅調整  | `v1.0.0` → `v1.0.1` |
+
+### 發版流程
+
+```bash
+./gradlew build                    # 1. 確認測試通過
+git add <files>                    # 2. Commit 變更
+git commit -m "[feat] 功能描述"
+git tag v1.0.0                     # 3. 打 Tag 定版
+git push && git push --tags        # 4. Push
+```
+
+然後到伺服器執行[更新版本](#更新版本)即可。
+
+### Commit 訊息格式
+
+```
+[類型] 中文描述
+```
+
+| 類型         | 說明        |
+|------------|-----------|
+| `feat`     | 新增功能      |
+| `fix`      | 修復 Bug    |
+| `refactor` | 重構（不影響功能） |
+| `docs`     | 文件更新      |
+| `test`     | 測試相關      |
+| `config`   | 配置檔變更     |
 
 ## 參考資源
 

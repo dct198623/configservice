@@ -5,6 +5,14 @@ plugins {
 }
 
 group = "com.acenexus.tata"
+version = try {
+    val process = ProcessBuilder("git", "describe", "--tags", "--abbrev=0")
+            .redirectErrorStream(true).start()
+    val output = process.inputStream.bufferedReader().readText().trim()
+    if (process.waitFor() == 0 && output.isNotEmpty()) output else "0.0.1-SNAPSHOT"
+} catch (_: Exception) {
+    "0.0.1-SNAPSHOT"
+}
 
 java {
     toolchain {
@@ -44,6 +52,5 @@ tasks.jar {
 
 // 保持 bootJar 任務可用，固定輸出檔名確保 Dockerfile COPY 路徑一致
 tasks.bootJar {
-    enabled = true
     archiveFileName.set("configservice.jar")
 }

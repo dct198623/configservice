@@ -1,17 +1,17 @@
 spring:
   application:
     name: configservice
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
   cloud:
     config:
       server:
         git:
           uri: https://github.com/AceNexus/configservice
           clone-on-start: false
-  rabbitmq:
-    host: localhost
-    port: 5672
-    username: guest
-    password: guest
+    bus:
+      enabled: false
   security:
     user:
       name: admin
@@ -19,3 +19,8 @@ spring:
 
 encrypt:
   key: test-encrypt-key
+
+management:
+  health:
+    rabbit:
+      enabled: false
