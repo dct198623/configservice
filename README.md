@@ -23,19 +23,18 @@ JCE 加密與 Spring Cloud Bus 動態刷新。
    ```
 2. `File` → `Open` → 選擇專案根目錄，等待 Gradle 同步完成
 3. `Run` → `Edit Configurations` → `ConfigserviceApplication` → `Environment variables`
-4. 輸入框貼上：`SECURITY_USERNAME=admin;SECURITY_PASSWORD=password;ENCRYPT_KEY=my-secret-key;RABBITMQ_USER=guest;RABBITMQ_PASS=guest`
+4. 輸入框貼上：`SECURITY_USERNAME=admin;SECURITY_PASSWORD=password;ENCRYPT_KEY=my-secret-key;RABBITMQ_USER=admin;RABBITMQ_PASS=password`
 
-   | 變數 | 開發用值 |
-   |---|---|
-   | `SECURITY_USERNAME` | `admin` |
-   | `SECURITY_PASSWORD` | `password` |
-   | `ENCRYPT_KEY` | `my-secret-key` |
-   | `RABBITMQ_USER` | `guest` |
-   | `RABBITMQ_PASS` | `guest` |
+| 變數                  | 開發用值            |
+|---------------------|-----------------|
+| `SECURITY_USERNAME` | `admin`         |
+| `SECURITY_PASSWORD` | `password`      |
+| `ENCRYPT_KEY`       | `my-secret-key` |
+| `RABBITMQ_USER`     | `admin`         |
+| `RABBITMQ_PASS`     | `password`      |
 
 5. 點擊 `ConfigserviceApplication` 旁的 ▶ 啟動
 6. 開啟 http://localhost:8888/actuator/health 確認回傳 `{"status":"UP"}`
-
 
 ## 系統架構
 
@@ -252,12 +251,12 @@ curl -u <username>:<password> http://localhost:8888/gatewayservice/prod
 
 ### 常用維運指令
 
-| 指令                                            | 說明        |
-|-----------------------------------------------|-----------|
-| `docker compose logs -f configservice`        | 即時查看日誌    |
-| `docker compose restart configservice`        | 重啟服務      |
-| `docker compose down`                         | 停止並移除所有容器 |
-| `docker compose build --no-cache`             | 重新建構映像    |
+| 指令                                     | 說明        |
+|----------------------------------------|-----------|
+| `docker compose logs -f configservice` | 即時查看日誌    |
+| `docker compose restart configservice` | 重啟服務      |
+| `docker compose down`                  | 停止並移除所有容器 |
+| `docker compose build --no-cache`      | 重新建構映像    |
 
 ## 版本管理
 
